@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -9,7 +8,6 @@ Panel {
   moduleName: "harel.vital-signs"
   ipcTarget: moduleName
 
-  readonly property var vitals: root
   property real usedRamBytes: 0
   property real loadAverage: 0
   property real loadAverage5: 0
@@ -32,7 +30,6 @@ Panel {
     return decodeURIComponent(value)
   }
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
-  readonly property color dim: Qt.darker(foreground, 1.5)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var defaultVisibleMetrics: ["ram", "load1", "download"]
   readonly property var metricCatalog: [
@@ -221,15 +218,6 @@ Panel {
     available = isFinite(usedRamBytes) && isFinite(loadAverage)
   }
 
-  function fanSummary() {
-    if (!vitals || !vitals.fans || vitals.fans.length === 0)
-      return "Not reported"
-    var values = []
-    for (var i = 0; i < vitals.fans.length; i++)
-      values.push(vitals.fans[i].label + "  " + Math.round(vitals.fans[i].rpm) + " RPM")
-    return values.join(" · ")
-  }
-
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -327,71 +315,6 @@ Panel {
           }
         }
 
-        PanelSeparator { foreground: root.foreground }
-
-        PanelSectionHeader {
-          text: "HARDWARE"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-        }
-
-        MetricRow {
-          label: "CPU usage"
-          value: root.vitals ? Math.round(root.vitals.cpuPercent) + "%" : "--"
-        }
-
-        MetricRow {
-          label: root.vitals && root.vitals.temperatureLabel !== ""
-            ? root.vitals.temperatureLabel : "Temperature"
-          value: root.vitals && root.vitals.temperatureCelsius >= 0
-            ? Number(root.vitals.temperatureCelsius).toFixed(1) + "°C"
-            : "Not reported"
-        }
-
-        MetricRow {
-          label: "Fan speed"
-          value: root.fanSummary()
-          multiline: true
-        }
-      }
-    }
-  }
-
-  component MetricRow: Item {
-    id: metric
-    property string label: ""
-    property string value: ""
-    property bool multiline: false
-
-    width: parent ? parent.width : implicitWidth
-    implicitHeight: row.implicitHeight + Style.space(18)
-
-    RowLayout {
-      id: row
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.verticalCenter: parent.verticalCenter
-      anchors.leftMargin: Style.spacing.rowPaddingX
-      anchors.rightMargin: Style.spacing.rowPaddingX
-      spacing: Style.space(16)
-
-      Text {
-        text: metric.label
-        color: root.foreground
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        Layout.alignment: Qt.AlignTop
-      }
-
-      Text {
-        text: metric.value
-        color: root.dim
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.body
-        horizontalAlignment: Text.AlignRight
-        wrapMode: metric.multiline ? Text.WordWrap : Text.NoWrap
-        Layout.fillWidth: true
-        Layout.alignment: Qt.AlignTop
       }
     }
   }
