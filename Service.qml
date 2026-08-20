@@ -88,7 +88,7 @@ QtObject {
     available = isFinite(usedRamBytes) && isFinite(loadAverage)
   }
 
-  Process {
+  property Process collector: Process {
     id: collector
     command: ["bash", root.collectorPath]
     stdout: StdioCollector {
@@ -96,7 +96,7 @@ QtObject {
     }
   }
 
-  Timer {
+  property Timer pollTimer: Timer {
     interval: 2000
     repeat: true
     running: true
