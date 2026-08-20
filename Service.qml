@@ -30,7 +30,7 @@ QtObject {
   }
 
   function refresh() {
-    if (!collector.running) collector.running = true
+    if (!statsProcess.running) statsProcess.running = true
   }
 
   function apply(raw) {
@@ -88,8 +88,8 @@ QtObject {
     available = isFinite(usedRamBytes) && isFinite(loadAverage)
   }
 
-  property Process collector: Process {
-    id: collector
+  property Process statsProcess: Process {
+    id: statsProcess
     command: ["bash", root.collectorPath]
     stdout: StdioCollector {
       waitForEnd: true
