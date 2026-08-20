@@ -132,7 +132,15 @@ Panel {
     command: ["bash", root.collectorPath]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.applyStats(text)
+      onStreamFinished: {
+        console.log("vital-signs collector bytes=" + String(text).length)
+        root.applyStats(text)
+      }
+    }
+    stderr: StdioCollector { id: statsError; waitForEnd: true }
+    onExited: function(exitCode) {
+      console.log("vital-signs collector exit=" + exitCode
+        + " error=" + statsError.text)
     }
   }
 
