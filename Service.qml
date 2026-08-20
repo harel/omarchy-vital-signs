@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-QtObject {
+Item {
   id: root
 
   property real usedRamBytes: 0
@@ -88,7 +88,7 @@ QtObject {
     available = isFinite(usedRamBytes) && isFinite(loadAverage)
   }
 
-  property Process statsProcess: Process {
+  Process {
     id: statsProcess
     command: ["bash", root.collectorPath]
     stdout: StdioCollector {
@@ -97,7 +97,7 @@ QtObject {
     }
   }
 
-  property Timer pollTimer: Timer {
+  Timer {
     interval: 2000
     repeat: true
     running: true
