@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "id": "harel.vital-signs",
   "name": "Vital Signs",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "author": "Harel Malka",
   "license": "MIT",
-  "description": "A compact Omarchy bar status line for RAM, load, and network download speed, with CPU, temperature, and fan details.",
+  "description": "A customizable Omarchy system-monitor widget for RAM, CPU, load, network, battery, temperatures, fans, and process controls.",
   "kinds": ["bar-widget"],
   "entryPoints": {
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Vital Signs",
-    "description": "RAM, load, and download speed with a hardware details panel",
+    "description": "Selectable live system metrics with settings and advanced process controls",
     "category": "System",
     "allowMultiple": false,
     "defaultSection": "right",
