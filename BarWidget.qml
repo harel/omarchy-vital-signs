@@ -27,6 +27,10 @@ Panel {
   property real previousCpuIdle: -1
   property real previousCpuTotal: -1
   property string page: "metrics"
+  property var topCpuProcesses: []
+  property var topRamProcesses: []
+  property string pendingAction: ""
+  property var pendingProcess: null
   readonly property string collectorPath: {
     var value = String(Qt.resolvedUrl("collect.sh"))
     if (value.indexOf("file://") === 0) value = value.substring(7)
@@ -198,6 +202,58 @@ Panel {
     page = "metrics"
   }
 
+  function showAdvanced() {
+    page = "advanced"
+  }
+
+  function requestProcessKill(process) {
+    if (!process) return
+    pendingAction = "kill"
+    pendingProcess = process
+    confirmDialog.message = "Terminate " + process.name + " (PID "
+      + process.pid + ") with SIGTERM?"
+    confirmDialog.confirmText = "Terminate"
+    confirmDialog.selectedIndex = 0
+    confirmDialog.opened = true
+  }
+
+  function requestOomTrigger() {
+    pendingAction = "oom"
+    pendingProcess = null
+    confirmDialog.message = "Trigger the kernel OOM killer now? This is a nuclear option: the kernel will choose and kill a memory-consuming process, which may cause data loss or destabilize the session."
+    confirmDialog.confirmText = "Trigger OOM"
+    confirmDialog.selectedIndex = 0
+    confirmDialog.opened = true
+  }
+
+  function runConfirmedAction() {
+    confirmDialog.opened = false
+    if (pendingAction === "kill" && pendingProcess) {
+      var process = pendingProcess
+      Quickshell.execDetached([
+        "pkexec", "sh", "-c",
+        "pid=\"$1\"; expected=\"$2\"; "
+          + "[ -r \"/proc/$pid/comm\" ] || exit 1; "
+          + "current=$(cat \"/proc/$pid/comm\"); "
+          + "[ \"$current\" = \"$expected\" ] || exit 2; "
+          + "kill -TERM -- \"$pid\"",
+        "vital-signs-kill", String(process.pid), String(process.name)
+      ])
+    } else if (pendingAction === "oom") {
+      Quickshell.execDetached([
+        "pkexec", "sh", "-c", "printf f > /proc/sysrq-trigger"
+      ])
+    }
+    pendingAction = ""
+    pendingProcess = null
+  }
+
+  function cancelConfirmedAction() {
+    confirmDialog.opened = false
+    pendingAction = ""
+    pendingProcess = null
+  }
+
   onOpenedChanged: if (!opened) page = "metrics"
 
   function clamp(value, minimum, maximum) {
@@ -216,6 +272,8 @@ Panel {
     var hottest = -1
     var hottestLabel = ""
     var nextFans = []
+    var nextTopCpu = []
+    var nextTopRam = []
     var lines = String(raw || "").trim().split("\n")
 
     for (var i = 0; i < lines.length; i++) {
@@ -243,6 +301,16 @@ Panel {
       } else if (fields[0] === "fan") {
         var rpm = Number(fields[2])
         if (isFinite(rpm)) nextFans.push({ label: fields[1], rpm: rpm })
+      } else if (fields[0] === "process_cpu" || fields[0] === "process_ram") {
+        var process = {
+          pid: Number(fields[1]),
+          user: fields[2] || "",
+          cpu: Number(fields[3]),
+          memory: Number(fields[4]),
+          name: fields[5] || "unknown"
+        }
+        if (fields[0] === "process_cpu") nextTopCpu.push(process)
+        else nextTopRam.push(process)
       }
     }
 
@@ -273,6 +341,8 @@ Panel {
     temperatureCelsius = hottest
     temperatureLabel = hottestLabel
     fans = nextFans
+    topCpuProcesses = nextTopCpu
+    topRamProcesses = nextTopRam
     available = isFinite(usedRamBytes) && isFinite(loadAverage)
   }
 
@@ -316,7 +386,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: popup.fittedContentWidth(Style.space(360))
+    contentWidth: popup.fittedContentWidth(Style.space(root.page === "advanced" ? 520 : 360))
     contentHeight: popup.fittedContentHeight(content.implicitHeight)
 
     PanelKeyCatcher {
@@ -332,8 +402,10 @@ Panel {
 
         PanelHero {
           width: parent.width
-          title: root.page === "settings" ? "Vital Signs Settings" : "Vital Signs"
-          meta: root.page === "settings" ? "Bar appearance and updates" : "Live system health"
+          title: root.page === "settings" ? "Vital Signs Settings"
+            : (root.page === "advanced" ? "Vital Signs Advanced" : "Vital Signs")
+          meta: root.page === "settings" ? "Bar appearance and updates"
+            : (root.page === "advanced" ? "Processes and emergency memory controls" : "Live system health")
           foreground: root.foreground
           fontFamily: root.fontFamily
           iconComponent: Component {
@@ -380,17 +452,31 @@ Panel {
 
         Item {
           width: parent.width
-          height: settingsButton.implicitHeight + Style.space(4)
+          height: footerButtons.implicitHeight + Style.space(4)
+
+          Row {
+            id: footerButtons
+            anchors.right: parent.right
+            spacing: Style.space(6)
+
+            PanelActionButton {
+              iconText: ""
+              tooltipText: "Advanced"
+              foreground: root.foreground
+              fontFamily: root.fontFamily
+              focusable: true
+              onClicked: root.showAdvanced()
+            }
 
           PanelActionButton {
             id: settingsButton
-            anchors.right: parent.right
             iconText: ""
             tooltipText: "Settings"
             foreground: root.foreground
             fontFamily: root.fontFamily
             focusable: true
             onClicked: root.showSettings()
+          }
           }
         }
         }
@@ -479,7 +565,121 @@ Panel {
           }
         }
 
+        Column {
+          visible: root.page === "advanced"
+          width: parent.width
+          spacing: Style.space(8)
+
+          PanelSectionHeader {
+            text: "TOP CPU"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: root.topCpuProcesses
+            ProcessRow {
+              required property var modelData
+              process: modelData
+              valueText: Number(modelData.cpu).toFixed(1) + "% CPU"
+            }
+          }
+
+          PanelSectionHeader {
+            text: "TOP RAM"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: root.topRamProcesses
+            ProcessRow {
+              required property var modelData
+              process: modelData
+              valueText: Number(modelData.memory).toFixed(1) + "% RAM"
+            }
+          }
+
+          Button {
+            width: parent.width
+            text: "Trigger kernel OOM killer"
+            iconText: "󰚌"
+            bordered: true
+            foreground: root.bar ? root.bar.urgent : Color.urgent
+            accent: root.bar ? root.bar.urgent : Color.urgent
+            fontFamily: root.fontFamily
+            onClicked: root.requestOomTrigger()
+          }
+
+          Button {
+            text: "Back"
+            iconText: "‹"
+            bordered: true
+            foreground: root.foreground
+            accent: root.bar ? root.bar.urgent : Color.accent
+            fontFamily: root.fontFamily
+            onClicked: root.showMetrics()
+          }
+        }
+
       }
+
+      ConfirmDialog {
+        id: confirmDialog
+        anchors.fill: parent
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+        onCanceled: root.cancelConfirmedAction()
+        onConfirmed: root.runConfirmedAction()
+      }
+    }
+  }
+
+  component ProcessRow: BorderSurface {
+    id: processRow
+    required property var process
+    property string valueText: ""
+
+    width: parent ? parent.width : implicitWidth
+    implicitHeight: Style.space(44)
+    color: "transparent"
+    borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
+    radius: Style.cornerRadius
+
+    Text {
+      anchors.left: parent.left
+      anchors.leftMargin: Style.spacing.rowPaddingX
+      anchors.verticalCenter: parent.verticalCenter
+      width: parent.width * 0.48
+      text: processRow.process.name + "  ·  " + processRow.process.user
+        + "  ·  PID " + processRow.process.pid
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+      elide: Text.ElideRight
+    }
+
+    Text {
+      anchors.right: killButton.left
+      anchors.rightMargin: Style.space(10)
+      anchors.verticalCenter: parent.verticalCenter
+      text: processRow.valueText
+      color: Qt.darker(root.foreground, 1.5)
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.bodySmall
+    }
+
+    PanelActionButton {
+      id: killButton
+      anchors.right: parent.right
+      anchors.rightMargin: Style.spacing.rowPaddingX
+      anchors.verticalCenter: parent.verticalCenter
+      iconText: "󰅙"
+      tooltipText: "Terminate process"
+      foreground: root.foreground
+      hoverColor: root.bar ? root.bar.urgent : Color.urgent
+      fontFamily: root.fontFamily
+      onClicked: root.requestProcessKill(processRow.process)
     }
   }
 }

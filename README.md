@@ -3,6 +3,8 @@
 An Omarchy 4 shell plugin that displays selectable live system metrics in the
 bar. Click the status line to choose metrics; use the settings page to control
 the refresh rate, bar alignment, empty-value visibility, and metric icons.
+The Advanced page lists top CPU and RAM processes with confirmed termination
+actions, plus a separately confirmed privileged kernel OOM trigger.
 
 ## Requirements
 
@@ -57,3 +59,5 @@ is not detected, run `omarchy-shell shell rescanPlugins` again.
 - Temperature and fan availability depend on what the kernel exposes through
   `/sys/class/hwmon`; unsupported hardware is shown as “Not reported”.
 - All metrics are read locally without root privileges.
+- Process termination and the kernel OOM trigger use `pkexec`; both require an
+  in-panel confirmation before the system authorization prompt appears.

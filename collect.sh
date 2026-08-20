@@ -61,3 +61,11 @@ for input in /sys/class/hwmon/hwmon*/fan*_input; do
   [[ -r "$label_file" ]] && label=$(<"$label_file")
   printf 'fan\t%s\t%s\n' "$label" "$value"
 done
+
+ps -eo pid=,user=,pcpu=,pmem=,comm= --sort=-pcpu | awk '
+  NR <= 5 { printf "process_cpu\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5 }
+'
+
+ps -eo pid=,user=,pcpu=,pmem=,comm= --sort=-pmem | awk '
+  NR <= 5 { printf "process_ram\t%s\t%s\t%s\t%s\t%s\n", $1, $2, $3, $4, $5 }
+'
