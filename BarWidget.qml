@@ -133,13 +133,13 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        console.log("vital-signs collector bytes=" + String(text).length)
+        console.warn("vital-signs collector bytes=" + String(text).length)
         root.applyStats(text)
       }
     }
     stderr: StdioCollector { id: statsError; waitForEnd: true }
     onExited: function(exitCode) {
-      console.log("vital-signs collector exit=" + exitCode
+      console.warn("vital-signs collector exit=" + exitCode
         + " error=" + statsError.text)
     }
   }
@@ -149,7 +149,10 @@ Panel {
     repeat: true
     running: true
     triggeredOnStart: true
-    onTriggered: root.refresh()
+    onTriggered: {
+      console.warn("vital-signs timer triggered")
+      root.refresh()
+    }
   }
 
   WidgetButton {
