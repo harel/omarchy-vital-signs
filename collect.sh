@@ -7,15 +7,18 @@ awk '
   END { printf "memory\t%.0f\n", total - available }
 ' /proc/meminfo
 
-awk '{ print "load\t" $1 }' /proc/loadavg
+awk '{ print "load\t" $1 "\t" $2 "\t" $3 }' /proc/loadavg
 
 awk '
   NR > 2 {
     name = $1
     sub(/:$/, "", name)
-    if (name != "lo") rx += $2
+    if (name != "lo") {
+      rx += $2
+      tx += $10
+    }
   }
-  END { printf "network\t%.0f\n", rx }
+  END { printf "network\t%.0f\t%.0f\n", rx, tx }
 ' /proc/net/dev
 
 awk '
