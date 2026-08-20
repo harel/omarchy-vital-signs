@@ -6,10 +6,8 @@
   "author": "Harel",
   "license": "MIT",
   "description": "A compact Omarchy bar status line for RAM, load, and network download speed, with CPU, temperature, and fan details.",
-  "kinds": ["service", "bar-widget"],
-  "keepLoaded": true,
+  "kinds": ["bar-widget"],
   "entryPoints": {
-    "service": "Service.qml",
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
