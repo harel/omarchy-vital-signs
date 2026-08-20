@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "harel.vital-signs",
   "name": "Vital Signs",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": "Harel",
   "license": "MIT",
   "description": "A compact Omarchy bar status line for RAM, load, and network download speed, with CPU, temperature, and fan details.",
@@ -18,8 +18,8 @@
     "defaultSection": "right",
     "defaults": {
       "visibleMetrics": ["ram", "load1", "download"],
-      "iconMetrics": ["ram", "load1", "load5", "load15", "download", "upload", "cpu", "temperature", "fan", "battery"],
-      "refreshSeconds": 2,
+      "showIcons": true,
+      "refreshSeconds": 5,
       "alignment": "right",
       "hideZeroValues": false
     }

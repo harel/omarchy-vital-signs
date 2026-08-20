@@ -2,7 +2,7 @@
 
 An Omarchy 4 shell plugin that displays selectable live system metrics in the
 bar. Click the status line to choose metrics; use the settings page to control
-the refresh rate, bar alignment, empty-value visibility, and per-metric icons.
+the refresh rate, bar alignment, empty-value visibility, and metric icons.
 
 ## Install
 

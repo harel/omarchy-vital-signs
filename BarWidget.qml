@@ -35,10 +35,6 @@ Panel {
   readonly property color foreground: bar ? bar.barForeground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var defaultVisibleMetrics: ["ram", "load1", "download"]
-  readonly property var defaultIconMetrics: [
-    "ram", "load1", "load5", "load15", "download", "upload", "cpu",
-    "temperature", "fan", "battery"
-  ]
   readonly property var metricCatalog: [
     { id: "ram", label: "Used RAM", icon: "󰘚" },
     { id: "load1", label: "1-minute load", icon: "󰓅" },
@@ -55,13 +51,10 @@ Panel {
     var configured = setting("visibleMetrics", defaultVisibleMetrics)
     return Array.isArray(configured) ? configured : defaultVisibleMetrics
   }
-  readonly property var iconMetricIds: {
-    var configured = setting("iconMetrics", defaultIconMetrics)
-    return Array.isArray(configured) ? configured : defaultIconMetrics
-  }
+  readonly property bool showIcons: setting("showIcons", true) === true
   readonly property int refreshSeconds: {
-    var value = Number(setting("refreshSeconds", 2))
-    return [1, 2, 5, 10].indexOf(value) !== -1 ? value : 2
+    var value = Number(setting("refreshSeconds", 5))
+    return [1, 2, 5, 10].indexOf(value) !== -1 ? value : 5
   }
   readonly property string alignment: String(setting("alignment", "right"))
   readonly property bool hideZeroValues: setting("hideZeroValues", false) === true
@@ -88,12 +81,8 @@ Panel {
     return visibleMetricIds.indexOf(id) !== -1
   }
 
-  function iconEnabled(id) {
-    return iconMetricIds.indexOf(id) !== -1
-  }
-
   function metricIcon(id) {
-    if (!iconEnabled(id)) return ""
+    if (!showIcons) return ""
     for (var i = 0; i < metricCatalog.length; i++)
       if (metricCatalog[i].id === id) return metricCatalog[i].icon + " "
     return ""
@@ -172,7 +161,8 @@ Panel {
 
   function persistSettings(values) {
     var entry = { id: moduleName }
-    for (var key in settings) if (key !== "id") entry[key] = settings[key]
+    for (var key in settings)
+      if (key !== "id" && key !== "iconMetrics") entry[key] = settings[key]
     for (var name in values) entry[name] = values[name]
     settings = entry
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
@@ -185,14 +175,6 @@ Panel {
     if (index === -1) next.push(id)
     else next.splice(index, 1)
     persistSettings({ visibleMetrics: next })
-  }
-
-  function toggleMetricIcon(id) {
-    var next = iconMetricIds.slice()
-    var index = next.indexOf(id)
-    if (index === -1) next.push(id)
-    else next.splice(index, 1)
-    persistSettings({ iconMetrics: next })
   }
 
   function setRefreshSeconds(value) {
@@ -215,6 +197,8 @@ Panel {
   function showMetrics() {
     page = "metrics"
   }
+
+  onOpenedChanged: if (!opened) page = "metrics"
 
   function clamp(value, minimum, maximum) {
     return Math.max(minimum, Math.min(maximum, value))
@@ -332,7 +316,7 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: popup.fittedContentWidth(Style.space(root.page === "settings" ? 520 : 360))
+    contentWidth: popup.fittedContentWidth(Style.space(360))
     contentHeight: popup.fittedContentHeight(content.implicitHeight)
 
     PanelKeyCatcher {
@@ -473,30 +457,15 @@ Panel {
             onClicked: root.persistSettings({ hideZeroValues: !root.hideZeroValues })
           }
 
-          PanelSectionHeader {
-            text: "METRIC ICONS"
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
-          Grid {
+          Toggle {
             width: parent.width
-            columns: 2
-            spacing: Style.space(5)
-
-            Repeater {
-              model: root.metricCatalog
-              Toggle {
-                required property var modelData
-                width: (parent.width - parent.spacing) / 2
-                label: modelData.label
-                checked: root.iconEnabled(modelData.id)
-                foreground: root.foreground
-                accent: root.bar ? root.bar.urgent : Color.accent
-                fontFamily: root.fontFamily
-                onClicked: root.toggleMetricIcon(modelData.id)
-              }
-            }
+            label: "Show metric icons"
+            description: "Display an icon before each measurement in the bar."
+            checked: root.showIcons
+            foreground: root.foreground
+            accent: root.bar ? root.bar.urgent : Color.accent
+            fontFamily: root.fontFamily
+            onClicked: root.persistSettings({ showIcons: !root.showIcons })
           }
 
           Button {
