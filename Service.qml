@@ -92,6 +92,7 @@ QtObject {
     id: collector
     command: ["bash", root.collectorPath]
     stdout: StdioCollector {
+      waitForEnd: true
       onStreamFinished: root.apply(text)
     }
   }
