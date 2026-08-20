@@ -6,6 +6,10 @@ the refresh rate, bar alignment, empty-value visibility, and metric icons.
 The Advanced page lists top CPU and RAM processes with confirmed termination
 actions, plus a separately confirmed privileged kernel OOM trigger.
 
+![Vital Signs bar](assets/vital-signs-bar.png)
+
+![Vital Signs overlay](assets/vital-signs-overlay.png)
+
 ## Requirements
 
 - Omarchy 4 with `omarchy-shell`
