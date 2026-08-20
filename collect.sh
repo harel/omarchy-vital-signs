@@ -30,6 +30,17 @@ awk '
   }
 ' /proc/stat
 
+battery=-1
+for capacity in /sys/class/power_supply/BAT*/capacity; do
+  [[ -r "$capacity" ]] || continue
+  value=$(<"$capacity")
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    battery="$value"
+    break
+  fi
+done
+printf 'battery\t%s\n' "$battery"
+
 shopt -s nullglob
 for input in /sys/class/hwmon/hwmon*/temp*_input; do
   [[ -r "$input" ]] || continue
