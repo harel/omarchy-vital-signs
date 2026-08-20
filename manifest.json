@@ -3,7 +3,7 @@
   "id": "harel.vital-signs",
   "name": "Vital Signs",
   "version": "0.3.1",
-  "author": "Harel",
+  "author": "Harel Malka",
   "license": "MIT",
   "description": "A compact Omarchy bar status line for RAM, load, and network download speed, with CPU, temperature, and fan details.",
   "kinds": ["bar-widget"],
