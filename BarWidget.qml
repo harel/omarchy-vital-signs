@@ -36,7 +36,18 @@ Panel {
     if (value.indexOf("file://") === 0) value = value.substring(7)
     return decodeURIComponent(value)
   }
-  readonly property color foreground: bar ? bar.barForeground : Color.foreground
+  // Panel palette. The bar button paints on the bar, so it keeps the inherited
+  // `barForeground`; everything in the popup paints on Color.popups.background
+  // and takes the theme foreground instead. The two diverge whenever the bar is
+  // transparent — `barForeground` then flips to the wallpaper's contrast color —
+  // which on a light theme is the popup's own background, leaving the panel
+  // invisible until the theme is switched back.
+  readonly property color foreground: bar ? bar.foreground : Color.foreground
+  readonly property color dim: Qt.darker(foreground, 1.5)
+  // Selection highlights follow the bar's active color so panel and bar agree.
+  readonly property color accent: bar ? bar.urgent : Color.accent
+  // Destructive affordances: the OOM trigger and the per-process kill button.
+  readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var defaultVisibleMetrics: ["ram", "load1", "download"]
   readonly property var metricCatalog: [
@@ -442,7 +453,7 @@ Panel {
               label: modelData.label
               description: root.metricValue(modelData.id, false)
               foreground: root.foreground
-              accent: root.bar ? root.bar.urgent : Color.accent
+              accent: root.accent
               fontFamily: root.fontFamily
               checked: root.metricSelected(modelData.id)
               onClicked: root.toggleMetric(modelData.id)
@@ -502,7 +513,7 @@ Panel {
                 text: modelData + "s"
                 selected: root.refreshSeconds === modelData
                 foreground: root.foreground
-                accent: root.bar ? root.bar.urgent : Color.accent
+                accent: root.accent
                 fontFamily: root.fontFamily
                 onClicked: root.setRefreshSeconds(modelData)
               }
@@ -525,7 +536,7 @@ Panel {
                 text: modelData.charAt(0).toUpperCase() + modelData.slice(1)
                 selected: root.alignment === modelData
                 foreground: root.foreground
-                accent: root.bar ? root.bar.urgent : Color.accent
+                accent: root.accent
                 fontFamily: root.fontFamily
                 onClicked: root.setAlignment(modelData)
               }
@@ -537,7 +548,7 @@ Panel {
             label: "Hide unavailable or zero values"
             description: "Keep empty sensors and idle metrics out of the bar."
             foreground: root.foreground
-            accent: root.bar ? root.bar.urgent : Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             checked: root.hideZeroValues
             onClicked: root.persistSettings({ hideZeroValues: !root.hideZeroValues })
@@ -549,7 +560,7 @@ Panel {
             description: "Display an icon before each measurement in the bar."
             checked: root.showIcons
             foreground: root.foreground
-            accent: root.bar ? root.bar.urgent : Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             onClicked: root.persistSettings({ showIcons: !root.showIcons })
           }
@@ -559,7 +570,7 @@ Panel {
             iconText: "‹"
             bordered: true
             foreground: root.foreground
-            accent: root.bar ? root.bar.urgent : Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             onClicked: root.showMetrics()
           }
@@ -605,8 +616,8 @@ Panel {
             text: "Trigger kernel OOM killer"
             iconText: "󰚌"
             bordered: true
-            foreground: root.bar ? root.bar.urgent : Color.urgent
-            accent: root.bar ? root.bar.urgent : Color.urgent
+            foreground: root.urgent
+            accent: root.urgent
             fontFamily: root.fontFamily
             onClicked: root.requestOomTrigger()
           }
@@ -616,7 +627,7 @@ Panel {
             iconText: "‹"
             bordered: true
             foreground: root.foreground
-            accent: root.bar ? root.bar.urgent : Color.accent
+            accent: root.accent
             fontFamily: root.fontFamily
             onClicked: root.showMetrics()
           }
@@ -643,7 +654,7 @@ Panel {
     width: parent ? parent.width : implicitWidth
     implicitHeight: Style.space(44)
     color: "transparent"
-    borderSpec: Border.controlSpec("normal", root.foreground, Color.accent)
+    borderSpec: Border.controlSpec("normal", root.foreground, root.accent)
     radius: Style.cornerRadius
 
     Text {
@@ -664,7 +675,7 @@ Panel {
       anchors.rightMargin: Style.space(10)
       anchors.verticalCenter: parent.verticalCenter
       text: processRow.valueText
-      color: Qt.darker(root.foreground, 1.5)
+      color: root.dim
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
     }
@@ -677,7 +688,7 @@ Panel {
       iconText: "󰅙"
       tooltipText: "Terminate process"
       foreground: root.foreground
-      hoverColor: root.bar ? root.bar.urgent : Color.urgent
+      hoverColor: root.urgent
       fontFamily: root.fontFamily
       onClicked: root.requestProcessKill(processRow.process)
     }
