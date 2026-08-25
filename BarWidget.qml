@@ -51,6 +51,38 @@ Panel {
     { id: "fan", label: "Fan speed", icon: "󰈐" },
     { id: "battery", label: "Battery", icon: "" }
   ]
+  // This widget's entry as it is actually stored in shell.json, or null while
+  // the config is still loading. The bar injects `settings` asynchronously, so
+  // it cannot be the source of truth: a widget instance built for a monitor
+  // that was just plugged in runs with the property still at its `{}` default
+  // until the injection lands. Reading through the stored entry keeps the bar
+  // showing the user's metrics across a hotplug instead of briefly reverting
+  // to the built-in defaults.
+  readonly property var storedSettings: {
+    var config = bar && bar.shell ? bar.shell.shellConfig : null
+    if (!config || !config.bar || !config.bar.layout) return null
+    var sections = ["left", "center", "right"]
+    for (var s = 0; s < sections.length; s++) {
+      var entries = config.bar.layout[sections[s]] || []
+      for (var i = 0; i < entries.length; i++)
+        if (entries[i] && String(entries[i].id) === moduleName) return entries[i]
+    }
+    var plugins = config.plugins || []
+    for (var p = 0; p < plugins.length; p++)
+      if (plugins[p] && String(plugins[p].id) === moduleName) return plugins[p]
+    return null
+  }
+
+  // Prefer what is on disk, and fall back to the injected copy only when the
+  // config is out of reach. `persistShellConfig` updates `shellConfig` before
+  // it writes the file, so saves still show up immediately.
+  readonly property var effectiveSettings: storedSettings ? storedSettings : (settings || ({}))
+
+  function setting(name, fallback) {
+    var value = effectiveSettings ? effectiveSettings[name] : undefined
+    return value === undefined || value === null ? fallback : value
+  }
+
   readonly property var visibleMetricIds: {
     var configured = setting("visibleMetrics", defaultVisibleMetrics)
     return Array.isArray(configured) ? configured : defaultVisibleMetrics
@@ -163,10 +195,16 @@ Panel {
     return values.length > 0 ? values.join("  ") : "Vital Signs"
   }
 
+  // `updateEntryInline` replaces the whole entry rather than merging into it,
+  // so the base has to be every key that is currently stored. Building it from
+  // the injected `settings` loses the rest of the entry whenever this instance
+  // has not been hydrated yet — one metric toggle from a freshly hotplugged
+  // monitor would rewrite the entry as just that toggle.
   function persistSettings(values) {
     var entry = { id: moduleName }
-    for (var key in settings)
-      if (key !== "id" && key !== "iconMetrics") entry[key] = settings[key]
+    var base = effectiveSettings || ({})
+    for (var key in base)
+      if (key !== "id" && key !== "iconMetrics") entry[key] = base[key]
     for (var name in values) entry[name] = values[name]
     settings = entry
     if (bar && bar.shell && typeof bar.shell.updateEntryInline === "function")
