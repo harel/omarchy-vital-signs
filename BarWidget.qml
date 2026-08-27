@@ -51,9 +51,18 @@ Panel {
     { id: "fan", label: "Fan speed", icon: "󰈐" },
     { id: "battery", label: "Battery", icon: "" }
   ]
+  // Settings that arrive from the shell's config store are QVariantList
+  // proxies rather than real JS arrays, so Array.isArray() rejects them and
+  // the widget silently falls back to the defaults. That happens on every
+  // widget rebuild -- lock/unlock on resume, a monitor coming back, a plugin
+  // rescan -- so read the value as an array-like and copy it out instead.
   readonly property var visibleMetricIds: {
-    var configured = setting("visibleMetrics", defaultVisibleMetrics)
-    return Array.isArray(configured) ? configured : defaultVisibleMetrics
+    var configured = setting("visibleMetrics", null)
+    if (configured === null || typeof configured.length !== "number")
+      return defaultVisibleMetrics
+    var ids = []
+    for (var i = 0; i < configured.length; i++) ids.push(String(configured[i]))
+    return ids
   }
   readonly property bool showIcons: setting("showIcons", true) === true
   readonly property int refreshSeconds: {
