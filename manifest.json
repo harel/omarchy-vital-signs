@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "harel.vital-signs",
   "name": "Vital Signs",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "author": "Harel Malka",
   "license": "MIT",
   "description": "A customizable Omarchy system-monitor widget for RAM, CPU, load, network, battery, temperatures, fans, and process controls.",
@@ -20,6 +20,8 @@
       "visibleMetrics": ["ram", "load1", "download"],
       "showIcons": true,
       "refreshSeconds": 5,
+      "processCpuMode": "delta",
+      "processCpuUseCoreMultiplier": true,
       "alignment": "right",
       "hideZeroValues": false
     }

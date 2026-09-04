@@ -3,8 +3,9 @@
 An Omarchy 4 shell plugin that displays selectable live system metrics in the
 bar. Click the status line to choose metrics; use the settings page to control
 the refresh rate, bar alignment, empty-value visibility, and metric icons.
-The Advanced page lists top CPU and RAM processes with confirmed termination
-actions, plus a separately confirmed privileged kernel OOM trigger.
+The Advanced page lists top CPU and RAM processes owned by the current user,
+with confirmed termination actions, plus a separately confirmed privileged
+kernel OOM trigger.
 
 ![Vital Signs bar](assets/vital-signs-bar.png)
 
@@ -14,6 +15,8 @@ actions, plus a separately confirmed privileged kernel OOM trigger.
 
 - Omarchy 4 with `omarchy-shell`
 - A Linux system exposing metrics through `/proc` and `/sys`
+- Standard Omarchy command-line tools: Bash, `awk`, GNU `ps`, `getconf`, and
+  `pkexec`
 
 ## Installation
 
@@ -53,8 +56,32 @@ omarchy-shell shell rescanPlugins
 omarchy plugin enable harel.vital-signs
 ```
 
-Changes under the linked directory are reloaded automatically. If a new file
-is not detected, run `omarchy-shell shell rescanPlugins` again.
+After changing QML or scripts behind the development symlink, restart the shell
+to ensure the linked source is reloaded:
+
+```bash
+omarchy restart shell
+```
+
+Use `omarchy-shell shell rescanPlugins` when adding a new plugin or entry point.
+
+## Process monitoring
+
+Process collection runs only while the Advanced page is open. The settings
+page offers two CPU calculation modes:
+
+- **Live delta** (default) calculates CPU usage from kernel tick differences
+  between samples. RAM appears after the first sample; CPU appears after the
+  second, with a measuring message shown in the meantime.
+- **ps average** uses GNU `ps` lifetime-average CPU values and appears after the
+  first sample.
+
+By default, CPU follows the familiar `top`/`ps` per-core convention: 100% means
+one logical CPU is fully occupied, so a multithreaded process can exceed 100%.
+Disable **Use per-core CPU percentage** to normalize each process against the
+machine's total logical CPU capacity instead.
+
+The collector excludes itself and its sampling children from the results.
 
 ## Notes
 
@@ -63,5 +90,11 @@ is not detected, run `omarchy-shell shell rescanPlugins` again.
 - Temperature and fan availability depend on what the kernel exposes through
   `/sys/class/hwmon`; unsupported hardware is shown as “Not reported”.
 - All metrics are read locally without root privileges.
-- Process termination and the kernel OOM trigger use `pkexec`; both require an
-  in-panel confirmation before the system authorization prompt appears.
+- The process list is restricted to the current user's processes. Termination
+  sends `SIGTERM` without privilege escalation after an in-panel confirmation
+  and revalidates the PID, process name, ownership, and kernel start time to
+  protect against PID reuse.
+- The kernel OOM trigger is an intentionally destructive emergency control. It
+  requires a separate in-panel confirmation followed by `pkexec` authorization,
+  then writes `f` to `/proc/sysrq-trigger`. The kernel chooses a memory-consuming
+  process to kill; this can cause data loss or destabilize the session.

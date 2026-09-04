@@ -29,6 +29,9 @@ Panel {
   property string page: "metrics"
   property var topCpuProcesses: []
   property var topRamProcesses: []
+  property var previousProcessTicks: ({})
+  property real previousProcessTotalTicks: -1
+  property bool cpuMeasuring: false
   property string pendingAction: ""
   property var pendingProcess: null
   readonly property string collectorPath: {
@@ -112,6 +115,12 @@ Panel {
     var value = Number(setting("refreshSeconds", 5))
     return [1, 2, 5, 10].indexOf(value) !== -1 ? value : 5
   }
+  readonly property string processCpuMode: {
+    var value = String(setting("processCpuMode", "delta"))
+    return value === "ps" ? "ps" : "delta"
+  }
+  readonly property bool processCpuUseCoreMultiplier:
+    setting("processCpuUseCoreMultiplier", true) === true
   readonly property string alignment: String(setting("alignment", "right"))
   readonly property bool hideZeroValues: setting("hideZeroValues", false) === true
   readonly property string statusText: buildStatusText()
@@ -238,6 +247,15 @@ Panel {
     persistSettings({ refreshSeconds: value })
   }
 
+  function setProcessCpuMode(value) {
+    if (["delta", "ps"].indexOf(value) === -1) return
+    previousProcessTicks = ({})
+    previousProcessTotalTicks = -1
+    topCpuProcesses = []
+    cpuMeasuring = value === "delta"
+    persistSettings({ processCpuMode: value })
+  }
+
   function setAlignment(section) {
     if (["left", "center", "right"].indexOf(section) === -1) return
     persistSettings({ alignment: section })
@@ -256,6 +274,11 @@ Panel {
   }
 
   function showAdvanced() {
+    previousProcessTicks = ({})
+    previousProcessTotalTicks = -1
+    topCpuProcesses = []
+    topRamProcesses = []
+    cpuMeasuring = processCpuMode === "delta"
     page = "advanced"
   }
 
@@ -284,13 +307,17 @@ Panel {
     if (pendingAction === "kill" && pendingProcess) {
       var process = pendingProcess
       Quickshell.execDetached([
-        "pkexec", "sh", "-c",
-        "pid=\"$1\"; expected=\"$2\"; "
-          + "[ -r \"/proc/$pid/comm\" ] || exit 1; "
-          + "current=$(cat \"/proc/$pid/comm\"); "
-          + "[ \"$current\" = \"$expected\" ] || exit 2; "
+        "bash", "-c",
+        "pid=\"$1\"; expected=\"$2\"; expected_start=\"$3\"; "
+          + "[[ -r \"/proc/$pid/comm\" && -O \"/proc/$pid\" ]] || exit 1; "
+          + "current=$(<\"/proc/$pid/comm\"); "
+          + "[[ \"$current\" == \"$expected\" ]] || exit 2; "
+          + "stat=$(<\"/proc/$pid/stat\"); rest=${stat##*) }; "
+          + "read -r -a fields <<< \"$rest\"; current_start=${fields[19]}; "
+          + "[[ \"$current_start\" == \"$expected_start\" ]] || exit 3; "
           + "kill -TERM -- \"$pid\"",
-        "vital-signs-kill", String(process.pid), String(process.name)
+        "vital-signs-kill", String(process.pid), String(process.name),
+        String(process.startTicks)
       ])
     } else if (pendingAction === "oom") {
       Quickshell.execDetached([
@@ -317,6 +344,93 @@ Panel {
     if (!statsProcess.running) statsProcess.running = true
   }
 
+  function refreshProcesses() {
+    if (!processStatsProcess.running) processStatsProcess.running = true
+  }
+
+  function applyProcessStats(raw) {
+    var totalTicks = -1
+    var cpuCount = 1
+    var memoryTotalKiB = -1
+    var samples = []
+    var psMode = false
+    var lines = String(raw || "").trim().split("\n")
+
+    for (var i = 0; i < lines.length; i++) {
+      var fields = lines[i].split("\t")
+      if (fields[0] === "process_snapshot") {
+        totalTicks = Number(fields[1])
+        cpuCount = Math.max(1, Number(fields[2]))
+        memoryTotalKiB = Number(fields[3])
+      } else if (fields[0] === "process") {
+        samples.push({
+          pid: Number(fields[1]),
+          user: fields[2] || "",
+          ticks: Number(fields[3]),
+          startTicks: Number(fields[4]),
+          rssKiB: Number(fields[5]),
+          name: fields[6] || "unknown"
+        })
+      } else if (fields[0] === "process_ps") {
+        psMode = true
+        samples.push({
+          pid: Number(fields[1]),
+          user: fields[2] || "",
+          cpu: Number(fields[3]),
+          startTicks: Number(fields[4]),
+          rssKiB: Number(fields[5]),
+          name: fields[6] || "unknown"
+        })
+      }
+    }
+
+    if (!isFinite(totalTicks) || totalTicks < 0) return
+
+    var nextTicks = ({})
+    var cpuProcesses = []
+    var ramProcesses = []
+    var totalDelta = totalTicks - previousProcessTotalTicks
+    var hasDelta = previousProcessTotalTicks >= 0 && totalDelta > 0
+    for (var j = 0; j < samples.length; j++) {
+      var sample = samples[j]
+      var key = psMode ? "" : String(sample.pid) + ":" + String(sample.startTicks)
+      if (!psMode) nextTicks[key] = sample.ticks
+
+      var process = {
+        pid: sample.pid,
+        user: sample.user,
+        startTicks: sample.startTicks,
+        cpu: psMode
+          ? sample.cpu / (processCpuUseCoreMultiplier ? 1 : cpuCount)
+          : 0,
+        memory: memoryTotalKiB > 0 ? sample.rssKiB * 100 / memoryTotalKiB : 0,
+        name: sample.name
+      }
+      ramProcesses.push(process)
+
+      if (psMode) {
+        cpuProcesses.push(process)
+      } else {
+        var oldTicks = previousProcessTicks[key]
+      }
+      if (!psMode && hasDelta && oldTicks !== undefined && sample.ticks >= oldTicks) {
+        var multiplier = processCpuUseCoreMultiplier ? cpuCount : 1
+        process.cpu = (sample.ticks - oldTicks) * multiplier * 100 / totalDelta
+        cpuProcesses.push(process)
+      }
+    }
+
+    cpuProcesses.sort(function(a, b) { return b.cpu - a.cpu })
+    ramProcesses.sort(function(a, b) { return b.memory - a.memory })
+    topCpuProcesses = cpuProcesses.slice(0, 5)
+    topRamProcesses = ramProcesses.slice(0, 5)
+    cpuMeasuring = !psMode && !hasDelta
+    if (!psMode) {
+      previousProcessTicks = nextTicks
+      previousProcessTotalTicks = totalTicks
+    }
+  }
+
   function applyStats(raw) {
     var nextRx = -1
     var nextTx = -1
@@ -325,8 +439,6 @@ Panel {
     var hottest = -1
     var hottestLabel = ""
     var nextFans = []
-    var nextTopCpu = []
-    var nextTopRam = []
     var lines = String(raw || "").trim().split("\n")
 
     for (var i = 0; i < lines.length; i++) {
@@ -354,16 +466,6 @@ Panel {
       } else if (fields[0] === "fan") {
         var rpm = Number(fields[2])
         if (isFinite(rpm)) nextFans.push({ label: fields[1], rpm: rpm })
-      } else if (fields[0] === "process_cpu" || fields[0] === "process_ram") {
-        var process = {
-          pid: Number(fields[1]),
-          user: fields[2] || "",
-          cpu: Number(fields[3]),
-          memory: Number(fields[4]),
-          name: fields[5] || "unknown"
-        }
-        if (fields[0] === "process_cpu") nextTopCpu.push(process)
-        else nextTopRam.push(process)
       }
     }
 
@@ -394,8 +496,6 @@ Panel {
     temperatureCelsius = hottest
     temperatureLabel = hottestLabel
     fans = nextFans
-    topCpuProcesses = nextTopCpu
-    topRamProcesses = nextTopRam
     available = isFinite(usedRamBytes) && isFinite(loadAverage)
   }
 
@@ -411,12 +511,29 @@ Panel {
     }
   }
 
+  Process {
+    id: processStatsProcess
+    command: ["bash", root.collectorPath, "--processes", root.processCpuMode]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.applyProcessStats(text)
+    }
+  }
+
   Timer {
     interval: root.refreshSeconds * 1000
     repeat: true
     running: true
     triggeredOnStart: true
     onTriggered: root.refresh()
+  }
+
+  Timer {
+    interval: root.refreshSeconds * 1000
+    repeat: true
+    running: root.opened && root.page === "advanced"
+    triggeredOnStart: true
+    onTriggered: root.refreshProcesses()
   }
 
   WidgetButton {
@@ -563,6 +680,48 @@ Panel {
           }
 
           PanelSectionHeader {
+            text: "PROCESS CPU CALCULATION"
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Row {
+            width: parent.width
+            spacing: Style.space(6)
+
+            Button {
+              text: "Live delta"
+              selected: root.processCpuMode === "delta"
+              foreground: root.foreground
+              accent: root.accent
+              fontFamily: root.fontFamily
+              onClicked: root.setProcessCpuMode("delta")
+            }
+
+            Button {
+              text: "ps average"
+              selected: root.processCpuMode === "ps"
+              foreground: root.foreground
+              accent: root.accent
+              fontFamily: root.fontFamily
+              onClicked: root.setProcessCpuMode("ps")
+            }
+          }
+
+          Toggle {
+            width: parent.width
+            label: "Use per-core CPU percentage"
+            description: "Allow multithreaded processes to exceed 100% CPU."
+            checked: root.processCpuUseCoreMultiplier
+            foreground: root.foreground
+            accent: root.accent
+            fontFamily: root.fontFamily
+            onClicked: root.persistSettings({
+              processCpuUseCoreMultiplier: !root.processCpuUseCoreMultiplier
+            })
+          }
+
+          PanelSectionHeader {
             text: "BAR ALIGNMENT"
             foreground: root.foreground
             fontFamily: root.fontFamily
@@ -627,6 +786,15 @@ Panel {
             text: "TOP CPU"
             foreground: root.foreground
             fontFamily: root.fontFamily
+          }
+
+          Text {
+            visible: root.cpuMeasuring
+            width: parent.width
+            text: "Measuring CPU usage…"
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
           }
 
           Repeater {
